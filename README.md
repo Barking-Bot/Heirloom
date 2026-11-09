@@ -116,3 +116,7 @@ heirloom/server.py    local web server and JSON API (listens on 127.0.0.1 only)
 heirloom/static/      the interface
 tests/                python3 -m unittest
 ```
+
+## License
+
+MIT. Free for anyone to use, change and share; see `LICENSE`.
