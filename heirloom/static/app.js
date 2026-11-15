@@ -69,6 +69,13 @@ function lifespan(p) {
   return p.deceased ? "deceased" : "";
 }
 const nee = (p) => (p.sex === "F" ? "née" : "born");
+const initials = (p) => {
+  const g = (p.given_names || "").trim(), s = (p.surname || p.birth_surname || "").trim();
+  return ((g[0] || "") + (s[0] || "")).toUpperCase() || "?";
+};
+const avatar = (p, cls = "") => `<span class="av${p.deceased ? " dead" : ""}${cls ? " " + cls : ""}" aria-hidden="true">${
+  p.portrait_id ? `<img src="/photo/${p.portrait_id}" alt="" loading="lazy">` : esc(initials(p))}</span>`;
+const chip = (p) => `<button class="chip" data-goto="${p.id}">${avatar(p)}${esc(p.display_name)}</button>`;
 const label = (p) => p.display_name + (lifespan(p) ? ` (${lifespan(p)})` : "");
 
 // ------------------------------------------------------------------ data
@@ -77,7 +84,8 @@ async function refresh() {
   state.meta = meta;
   state.graph = graph;
   state.people = new Map(graph.people.map((p) => [p.id, p]));
-  $("#familyName").textContent = meta.family_name;
+  $("#familyNameText").textContent = meta.family_name;
+  $("#sampleBanner").hidden = !meta.sample;
   document.title = `${meta.family_name} · Heirloom`;
   if (!state.people.has(state.focus)) {
     const saved = Number(store("heirloom.focus"));
@@ -131,7 +139,7 @@ function makePicker({ placeholder = "Type a name…", onPick = () => {}, exclude
       .sort((a, b) => a.display_name.localeCompare(b.display_name)).slice(0, 40);
     hi = 0;
     opts.innerHTML = shown.length ? shown.map((p, i) =>
-      `<div class="opt${i === 0 ? " hi" : ""}" data-i="${i}">${esc(p.display_name)}${p.nee ? ` <small>${nee(p)} ${esc(p.nee)}</small>` : ""} <small>${esc(lifespan(p))}</small></div>`).join("")
+      `<div class="opt${i === 0 ? " hi" : ""}" data-i="${i}">${avatar(p)}${esc(p.display_name)}${p.nee ? ` <small>${nee(p)} ${esc(p.nee)}</small>` : ""} <small>${esc(lifespan(p))}</small></div>`).join("")
       : `<div class="opt muted">No matches</div>`;
     opts.hidden = false;
   }
@@ -187,7 +195,7 @@ function makeMultiPicker(initial = []) {
   function draw() {
     chips.innerHTML = ids.map((id) => {
       const p = state.people.get(id);
-      return p ? `<button type="button" class="chip" data-id="${id}">${esc(p.display_name)} <span class="x">×</span></button>` : "";
+      return p ? `<button type="button" class="chip" data-id="${id}" title="Remove">${avatar(p)}${esc(p.display_name)}<span class="x">×</span></button>` : "";
     }).join("");
   }
   chips.addEventListener("click", (e) => {
@@ -200,7 +208,7 @@ function makeMultiPicker(initial = []) {
 }
 
 // ------------------------------------------------------------------ tree layout
-const W = 172, H = 64, INNER = 40, GAP = 44, LAYER = 150;
+const W = 212, H = 66, INNER = 40, GAP = 40, LAYER = 150;
 
 function computeLayout() {
   const g = state.graph, focus = state.focus;
@@ -336,6 +344,7 @@ function renderTree() {
   vp.innerHTML = "";
   const empty = state.graph.people.length === 0;
   $("#emptyState").hidden = !empty;
+  $("#tab-tree").classList.toggle("is-empty", empty);
   $(".legend").hidden = empty;
   if (empty) return;
   const L = computeLayout();
@@ -434,28 +443,37 @@ function drawNode(parent, n) {
     class: `node ${p.sex}${p.deceased ? " deceased" : ""}${p.id === state.focus ? " focus" : ""}${p.id === state.selected ? " selected" : ""}`,
     transform: `translate(${n.x},${n.y})`, "data-id": p.id, tabindex: 0,
   }, parent);
-  svg("rect", { class: "box", width: W, height: H, rx: 9 }, g);
-  svg("rect", { class: "bar", x: 0, y: 8, width: 4, height: H - 16, rx: 2 }, g);
-  let tx = 14;
+  svg("rect", { class: "box", width: W, height: H, rx: 10 }, g);
+  const R = 19, cx = 12 + R, cy = H / 2;
   if (p.portrait_id) {
     const id = `clip${p.id}`;
     const cp = svg("clipPath", { id }, g);
-    svg("circle", { cx: 34, cy: H / 2, r: 21 }, cp);
-    svg("circle", { class: "portrait-ring", cx: 34, cy: H / 2, r: 22 }, g);
-    svg("image", { href: `/photo/${p.portrait_id}`, x: 12, y: H / 2 - 22, width: 44, height: 44,
+    svg("circle", { cx, cy, r: R }, cp);
+    svg("image", { href: `/photo/${p.portrait_id}`, x: cx - R, y: cy - R, width: R * 2, height: R * 2,
       "clip-path": `url(#${id})`, preserveAspectRatio: "xMidYMid slice" }, g);
-    tx = 62;
+    svg("circle", { class: "ring", cx, cy, r: R }, g);
+  } else {
+    svg("circle", { class: "mono", cx, cy, r: R }, g);
+    svg("text", { class: "mono-t", x: cx, y: cy }, g).textContent = initials(p);
   }
-  const maxChars = Math.floor((W - tx - 8) / 7.1);
-  const fit = (s) => (s.length > maxChars ? s.slice(0, maxChars - 1) + "…" : s);
-  const name = svg("text", { class: "name", x: tx, y: 24 }, g);
-  name.textContent = fit(p.display_name);
-  const sub1 = svg("text", { class: "sub", x: tx, y: 41 }, g);
-  sub1.textContent = lifespan(p);
-  if (p.nee) {
-    const sub2 = svg("text", { class: "sub", x: tx, y: 55 }, g);
-    sub2.textContent = fit(`${nee(p)} ${p.nee}`);
-  }
+  const tx = cx + R + 11;
+  const maxW = W - tx - 10;
+  // Measure the real rendered width and trim only if it actually overflows.
+  const put = (el, s) => {
+    el.textContent = s;
+    if (el.getComputedTextLength() <= maxW) return;
+    let lo = 1, hi = s.length;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      el.textContent = s.slice(0, mid).trimEnd() + "…";
+      if (el.getComputedTextLength() <= maxW) lo = mid; else hi = mid - 1;
+    }
+    el.textContent = s.slice(0, lo).trimEnd() + "…";
+  };
+  const lines = [lifespan(p), p.nee ? `${nee(p)} ${p.nee}` : ""].filter(Boolean);
+  const nameY = lines.length === 2 ? 22 : lines.length === 1 ? 28 : 37;
+  put(svg("text", { class: "name", x: tx, y: nameY }, g), p.display_name);
+  lines.forEach((t, i) => put(svg("text", { class: "sub", x: tx, y: nameY + 17 + i * 15 }, g), t));
   const t = svg("title", {}, g);
   t.textContent = `${p.display_name}${p.nee ? ` (${nee(p)} ${p.nee})` : ""}\nClick for details · double-click to centre the tree here`;
 }
@@ -482,10 +500,17 @@ function fitView() {
   if (!b) return;
   const svgEl = $("#tree");
   const w = svgEl.clientWidth, h = svgEl.clientHeight - 50;
-  const panelW = state.selected && !$("#panel").hidden ? Math.min(400, w * 0.5) : 0;
+  const panelW = state.selected && !$("#panel").hidden && w > 700 ? $("#panel").offsetWidth : 0;
   const availW = w - panelW;
   const k = Math.max(0.25, Math.min(1.1, Math.min((availW - 40) / (b.x1 - b.x0), (h - 40) / (b.y1 - b.y0))));
-  state.view = { k, x: (availW - (b.x1 - b.x0) * k) / 2 - b.x0 * k, y: (h - (b.y1 - b.y0) * k) / 2 - b.y0 * k + 10 };
+  const f = state.layout.nodes.get(state.focus);
+  if (k < 0.6 && f) {
+    // Too big to read when fitted (common on phones): show the centred person at a readable size.
+    const kk = w < 700 ? 0.75 : 0.6;
+    state.view = { k: kk, x: availW / 2 - (f.x + W / 2) * kk, y: h / 2 - (f.y + H / 2) * kk };
+  } else {
+    state.view = { k, x: (availW - (b.x1 - b.x0) * k) / 2 - b.x0 * k, y: (h - (b.y1 - b.y0) * k) / 2 - b.y0 * k + 10 };
+  }
   applyView();
 }
 
@@ -572,74 +597,83 @@ async function openPanel(id, quiet = false) {
   let p;
   try { p = await api("GET", `/api/people/${id}`); } catch (e) { if (!quiet) toast(e.message); return; }
   const panel = $("#panel");
-  const rel = (link, extra = "") => `
+  const kindTag = (k) => (k === "biological" ? "" : `<span class="tag ${k}">${KIND_LABEL[k]}</span>`);
+  const editBtn = (attr, id) => `<button class="quiet icon edit" ${attr}="${id}" title="Change or remove">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M13.5 3.5l3 3L7 16H4v-3z"/></svg></button>`;
+  const relRow = (person, sub, tag = "", edit = "") => `
     <div class="rel">
-      <div class="who"><button class="link" data-goto="${link.person.id}">${esc(link.person.display_name)}</button>
-        <small>${esc(lifespan(link.person))}${link.date ? ` · ${esc(link.date)}` : ""}</small></div>
-      <span class="badge ${link.kind}">${KIND_LABEL[link.kind]}</span>
-      ${extra}
+      ${avatar(person)}
+      <div class="who"><button class="name-btn" data-goto="${person.id}">${esc(person.display_name)}</button>
+        <small>${esc(sub)}</small></div>
+      ${tag}${edit}
     </div>`;
+  const linkSub = (l) => [lifespan(l.person), l.kind === "adoptive" && l.date ? `adopted ${l.date}` : l.date].filter(Boolean).join(", ");
   const siblings = computeSiblings(id);
   const coupleLine = (c) => {
-    const bits = [];
     const verb = { marriage: "Married", "civil union": "Civil union", partnership: "Partners", engagement: "Engaged", other: "Together" }[c.kind];
-    bits.push(verb + (c.start_date ? ` ${c.start_date}` : "") + (c.start_place ? `, ${c.start_place}` : ""));
+    let s = verb + (c.start_date ? ` ${c.start_date}` : "") + (c.start_place ? ` in ${c.start_place}` : "");
     if (c.end_reason || c.end_date) {
-      const why = { divorce: "Divorced", death: "Until death", annulment: "Annulled", separation: "Separated", other: "Ended", "": "Ended" }[c.end_reason];
-      bits.push(why + (c.end_date ? ` ${c.end_date}` : ""));
+      const why = { divorce: "divorced", death: "until death", annulment: "annulled", separation: "separated", other: "ended", "": "ended" }[c.end_reason];
+      s += `; ${why}${c.end_date && c.end_reason !== "death" ? ` ${c.end_date}` : ""}`;
     }
-    return bits.join(" · ");
+    return s;
   };
+  const section = (title, body, addLabel, addAttr) => `
+    <div class="section">
+      <div class="section-head"><h3>${title}</h3>${addLabel ? `<button class="quiet" ${addAttr}>${addLabel}</button>` : ""}</div>
+      ${body}
+    </div>`;
+  const place = (d, pl) => [d, pl].filter(Boolean).join(", ") || "Not recorded";
   panel.innerHTML = `
-    <button class="ghost icon close" data-act="close" title="Close">✕</button>
-    ${p.portrait_id ? `<img class="portrait" src="/photo/${p.portrait_id}" alt="">` : ""}
-    <h2>${esc(p.display_name)}</h2>
-    ${p.nee ? `<div class="nee">${nee(p)} ${esc(p.given_names)} ${esc(p.nee)}</div>` : ""}
-    <div class="vital"><b>Born</b> ${esc(p.birth_date || "—")}${p.birth_place ? `, ${esc(p.birth_place)}` : ""}</div>
-    ${p.deceased ? `<div class="vital"><b>Died</b> ${esc(p.death_date || "—")}${p.death_place ? `, ${esc(p.death_place)}` : ""}</div>` : ""}
-    <div class="actions">
-      <button data-act="edit">Edit details</button>
-      ${p.id !== state.focus ? `<button class="ghost" data-act="focus">Centre tree here</button>` : ""}
-      <button class="ghost" data-act="kin">How are we related?</button>
+    <div class="panel-head">
+      <button class="quiet icon close" data-act="close" title="Close (Esc)">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"/></svg></button>
+      <div class="who-block">
+        ${avatar(p)}
+        <div>
+          <h2>${esc(p.display_name)}</h2>
+          ${p.nee ? `<div class="nee">${nee(p)} ${esc(p.given_names)} ${esc(p.nee)}</div>` : ""}
+        </div>
+      </div>
+      <dl class="vitals">
+        <dt>Born</dt><dd>${esc(place(p.birth_date, p.birth_place))}</dd>
+        ${p.deceased ? `<dt>Died</dt><dd>${esc(place(p.death_date, p.death_place))}</dd>` : ""}
+      </dl>
+      <div class="panel-actions">
+        <button data-act="edit">Edit details</button>
+        ${p.id !== state.focus ? `<button data-act="focus">Centre tree here</button>` : ""}
+        <button data-act="kin">Compare relationship</button>
+      </div>
     </div>
-
-    <h3>Parents</h3>
-    ${p.parents.map((l) => rel(l, `<button class="ghost icon" data-link="${l.id}" title="Change">✎</button>`)).join("") || `<p class="muted">None recorded.</p>`}
-    <button class="ghost" data-add="parent">＋ Add parent</button>
-
-    <h3>Partners</h3>
-    ${p.couples.map((c) => `
-      <div class="rel">
-        <div class="who"><button class="link" data-goto="${c.partner.id}">${esc(c.partner.display_name)}</button>
-          <small>${esc(coupleLine(c))}</small></div>
-        <button class="ghost icon" data-couple="${c.id}" title="Change">✎</button>
-      </div>`).join("") || `<p class="muted">None recorded.</p>`}
-    <button class="ghost" data-add="partner">＋ Add partner or spouse</button>
-
-    <h3>Children</h3>
-    ${p.children.map((l) => rel(l, `<button class="ghost icon" data-link="${l.id}" title="Change">✎</button>`)).join("") || `<p class="muted">None recorded.</p>`}
-    <button class="ghost" data-add="child">＋ Add child</button>
-
-    ${siblings.length ? `<h3>Siblings</h3>${siblings.map((s) => `
-      <div class="rel"><div class="who"><button class="link" data-goto="${s.p.id}">${esc(s.p.display_name)}</button>
-        <small>${esc(lifespan(s.p))}</small></div>${s.tag ? `<span class="badge">${s.tag}</span>` : ""}</div>`).join("")}` : ""}
-
-    ${p.alt_names.length ? `<h3>Other names</h3>${p.alt_names.map((n) => `<div class="vital"><b>${esc(cap(n.kind))}:</b> ${esc([n.given_names, n.surname].filter(Boolean).join(" "))}${n.from_date ? ` <span class="muted">(from ${esc(n.from_date)})</span>` : ""}</div>`).join("")}` : ""}
-
-    ${p.facts.length ? `<h3>Life events &amp; details</h3>${p.facts.map((f) => `<div class="vital"><b>${esc(cap(f.kind))}</b> ${esc([f.detail, f.date, f.place].filter(Boolean).join(" · "))}</div>`).join("")}` : ""}
-
-    ${p.notes ? `<h3>Notes</h3><div class="notes">${esc(p.notes)}</div>` : ""}
-
-    <h3>Stories</h3>
-    ${p.stories.map((s) => `<div class="rel"><div class="who"><button class="link" data-story="${s.id}">${esc(s.title || "Untitled")}</button><small>${esc(s.date)}</small></div></div>`).join("") || `<p class="muted">No stories yet.</p>`}
-    <button class="ghost" data-act="story">＋ Write a story about ${esc(p.given_names || "them")}</button>
-
-    <h3>Photos</h3>
-    <div class="thumbs">${p.media.map((m) => `<img src="/photo/${m.id}" data-photo="${m.id}" alt="${esc(m.caption)}" title="${esc(m.caption)}">`).join("")}</div>
-    <label class="button ghost" style="margin-top:8px;background:transparent;color:var(--accent)">＋ Add photos<input type="file" accept="image/*" multiple hidden data-act="upload"></label>
+    <div class="panel-body">
+      ${section("Parents",
+        p.parents.map((l) => relRow(l.person, linkSub(l), kindTag(l.kind), editBtn("data-link", l.id))).join("") || `<p class="none">No parents recorded.</p>`,
+        "Add parent", 'data-add="parent"')}
+      ${section("Partners",
+        p.couples.map((c) => relRow(c.partner, coupleLine(c), "", editBtn("data-couple", c.id))).join("") || `<p class="none">No partners recorded.</p>`,
+        "Add partner", 'data-add="partner"')}
+      ${section("Children",
+        p.children.map((l) => relRow(l.person, linkSub(l), kindTag(l.kind), editBtn("data-link", l.id))).join("") || `<p class="none">No children recorded.</p>`,
+        "Add child", 'data-add="child"')}
+      ${siblings.length ? section("Siblings", siblings.map((s) => relRow(s.p, lifespan(s.p),
+        s.tag ? `<span class="tag ${s.tag.split(" ")[0]}">${cap(s.tag)}</span>` : "")).join("")) : ""}
+      ${p.alt_names.length ? section("Other names", `<dl class="facts">${p.alt_names.map((n) =>
+        `<dt>${esc(cap(n.kind))}</dt><dd>${esc([n.given_names, n.surname].filter(Boolean).join(" "))}${n.from_date ? ` <span class="muted">from ${esc(n.from_date)}</span>` : ""}</dd>`).join("")}</dl>`) : ""}
+      ${p.facts.length ? section("Life events", `<dl class="facts">${p.facts.map((f) =>
+        `<dt>${esc(cap(f.kind))}</dt><dd>${esc([f.detail, [f.date, f.place].filter(Boolean).join(", ")].filter(Boolean).join(" — "))}</dd>`).join("")}</dl>`) : ""}
+      ${p.notes ? section("Notes", `<div class="notes">${esc(p.notes)}</div>`) : ""}
+      ${section("Stories",
+        p.stories.map((s) => `<div class="rel"><div class="who"><button class="name-btn" data-story="${s.id}">${esc(s.title || "Untitled")}</button><small>${esc(s.date)}</small></div></div>`).join("")
+          || `<p class="none">No stories about ${esc(p.given_names || "them")} yet.</p>`,
+        "Write a story", 'data-act="story"')}
+      ${section("Photos", `<div class="thumbs">${p.media.map((m) =>
+        `<img src="/photo/${m.id}" data-photo="${m.id}" alt="${esc(m.caption)}" title="${esc(m.caption)}" loading="lazy">`).join("")}
+        <label class="add-tile" title="Add photos">+<input type="file" accept="image/*" multiple hidden data-act="upload"></label></div>`)}
+    </div>
   `;
   const wasHidden = panel.hidden;
   panel.hidden = false;
+  $("#tab-tree").classList.add("panel-open");
   keepVisible(id, wasHidden);
   panel.onclick = async (e) => {
     const t = e.target.closest("button, img");
@@ -680,6 +714,7 @@ function keepVisible(id) {
 function closePanel() {
   state.selected = null;
   $("#panel").hidden = true;
+  $("#tab-tree").classList.remove("panel-open");
   $$(".node.selected").forEach((n) => n.classList.remove("selected"));
 }
 
@@ -767,13 +802,13 @@ function personModal(p = null) {
       <select data-k="kind">${state.meta.kinds.name.map((k) => `<option value="${k}"${k === (n.kind || "married") ? " selected" : ""}>${cap(k)}</option>`).join("")}</select>
       <input data-k="surname" placeholder="Surname" value="${esc(n.surname || "")}">
       <input data-k="from_date" placeholder="From (date)" value="${esc(n.from_date || "")}">
-      <button type="button" class="ghost icon" data-remove title="Remove">✕</button></div>`;
+      <button type="button" class="quiet icon" data-remove title="Remove">✕</button></div>`;
   const factRow = (f = {}) => `<div class="item fact">
       <select data-k="kind">${state.meta.kinds.fact.map((k) => `<option value="${k}"${k === (f.kind || "occupation") ? " selected" : ""}>${cap(k)}</option>`).join("")}</select>
       <input data-k="date" placeholder="Date" value="${esc(f.date || "")}">
       <input data-k="place" placeholder="Place" value="${esc(f.place || "")}">
       <input data-k="detail" placeholder="Detail" value="${esc(f.detail || "")}">
-      <button type="button" class="ghost icon" data-remove title="Remove">✕</button></div>`;
+      <button type="button" class="quiet icon" data-remove title="Remove">✕</button></div>`;
   openModal(`
     <h2>${isNew ? "Add a person" : `Edit ${esc(p.display_name)}`}</h2>
     <div class="grid2">
@@ -789,17 +824,17 @@ function personModal(p = null) {
         ${field("death_place", "Died (place)", p.death_place)}
       </div>
     </div>
-    <div class="field"><span>Later names — marriage, adoption, legal change, nicknames</span>
+    <div class="field"><span>Later names (from marriage, adoption, a legal change, or a nickname)</span>
       <div class="repeat" id="altNames">${p.alt_names.map(nameRow).join("")}</div>
-      <div><button type="button" class="ghost" data-addrow="alt">＋ Add a name</button></div></div>
-    <div class="field"><span>Life events &amp; details — occupation, residence, military service, immigration…</span>
+      <div><button type="button" class="quiet add-row" data-addrow="alt">+ Add a name</button></div></div>
+    <div class="field"><span>Life events (work, homes, military service, immigration, and so on)</span>
       <div class="repeat" id="facts">${p.facts.map(factRow).join("")}</div>
-      <div><button type="button" class="ghost" data-addrow="fact">＋ Add an event</button></div></div>
+      <div><button type="button" class="quiet add-row" data-addrow="fact">+ Add an event</button></div></div>
     <label class="field"><span>Notes</span><textarea name="notes" rows="4">${esc(p.notes || "")}</textarea></label>
     <div class="modal-actions">
       ${isNew ? "" : `<button type="submit" value="delete" class="danger left">Delete person</button>`}
-      <button type="submit" value="cancel" class="ghost" formnovalidate>Cancel</button>
-      <button type="submit" value="save">${isNew ? "Add" : "Save"}</button>
+      <button type="submit" value="cancel" class="quiet" formnovalidate>Cancel</button>
+      <button type="submit" value="save" class="primary">${isNew ? "Add" : "Save"}</button>
     </div>`, {
     onReady(form) {
       const deceased = $("input[name=deceased]", form);
@@ -888,8 +923,8 @@ function relationModal(p, role) {
     ${kindBlock}
     ${alsoBlock}
     <div class="modal-actions">
-      <button type="submit" value="cancel" class="ghost" formnovalidate>Cancel</button>
-      <button type="submit" value="save">Add</button>
+      <button type="submit" value="cancel" class="quiet" formnovalidate>Cancel</button>
+      <button type="submit" value="save" class="primary">Add</button>
     </div>`, {
     onReady(form) {
       existing = makePicker({ exclude: (x) => x.id === p.id });
@@ -957,8 +992,8 @@ function linkModal(linkId, contextPerson) {
     </div>
     <div class="modal-actions">
       <button type="submit" value="delete" class="danger left">Remove this link</button>
-      <button type="submit" value="cancel" class="ghost">Cancel</button>
-      <button type="submit" value="save">Save</button>
+      <button type="submit" value="cancel" class="quiet">Cancel</button>
+      <button type="submit" value="save" class="primary">Save</button>
     </div>`, {
     async onSubmit(fd, action) {
       if (action === "delete") {
@@ -987,8 +1022,8 @@ function coupleModal(c) {
     <label class="field"><span>Notes</span><textarea name="notes" rows="3">${esc(c.notes)}</textarea></label>
     <div class="modal-actions">
       <button type="submit" value="delete" class="danger left">Remove this relationship</button>
-      <button type="submit" value="cancel" class="ghost">Cancel</button>
-      <button type="submit" value="save">Save</button>
+      <button type="submit" value="cancel" class="quiet">Cancel</button>
+      <button type="submit" value="save" class="primary">Save</button>
     </div>`, {
     async onSubmit(fd, action) {
       if (action === "delete") {
@@ -1008,16 +1043,17 @@ function renderPeople() {
   const q = $("#peopleSearch").value.trim().toLowerCase();
   const rows = [...state.graph.people].sort((a, b) =>
     a.surname.localeCompare(b.surname) || a.given_names.localeCompare(b.given_names))
-    .filter((p) => !q || [p.display_name, p.nee, p.birth_surname, p.birth_date, p.birth_place, p.death_date, p.death_place,
-      ...p.alt_names.map((n) => n.surname)].join(" ").toLowerCase().includes(q));
+    .filter((p) => !q || searchText(p).includes(q));
   $("#peopleBody").innerHTML = rows.map((p) => `
     <tr data-id="${p.id}">
-      <td><b>${esc(p.display_name)}</b>${p.nee ? ` <span class="muted">${nee(p)} ${esc(p.nee)}</span>` : ""}</td>
-      <td>${esc([p.birth_date, p.birth_place].filter(Boolean).join(", "))}</td>
-      <td>${esc([p.death_date, p.death_place].filter(Boolean).join(", ")) || (p.deceased ? "deceased" : "")}</td>
-      <td class="muted">${p.id === state.focus ? "centre of tree" : ""}</td>
-    </tr>`).join("") || `<tr><td colspan="4" class="muted">No one yet.</td></tr>`;
+      <td>${avatar(p)}<span><span class="pname">${esc(p.display_name)}</span>${p.nee ? `<br><span class="pnee">${nee(p)} ${esc(p.nee)}</span>` : ""}</span></td>
+      <td class="num">${esc([p.birth_date, p.birth_place].filter(Boolean).join(", "))}</td>
+      <td class="num">${esc([p.death_date, p.death_place].filter(Boolean).join(", ")) || (p.deceased ? "Deceased" : "")}</td>
+    </tr>`).join("") || `<tr><td colspan="3" class="muted">${q ? "No one matches that search." : "No one has been added yet."}</td></tr>`;
 }
+
+const searchText = (p) => [p.display_name, p.nee, p.birth_surname, p.birth_date, p.birth_place, p.death_date,
+  p.death_place, ...p.alt_names.map((n) => `${n.given_names} ${n.surname}`)].join(" ").toLowerCase();
 
 // ------------------------------------------------------------------ stories
 let storiesCache = [];
@@ -1028,11 +1064,10 @@ async function renderStories() {
   $("#storyList").innerHTML = list.map((s) => `
     <article class="story">
       <h3>${esc(s.title || "Untitled")}</h3>
-      <div class="meta">${esc([s.date, s.told_by && `told by ${s.told_by}`].filter(Boolean).join(" · "))}</div>
+      ${s.date || s.told_by ? `<div class="meta">${esc([s.date, s.told_by && `Told by ${s.told_by}`].filter(Boolean).join(". "))}</div>` : ""}
       <div class="body">${esc(s.body)}</div>
-      <div class="chips">${s.person_ids.map((id) => state.people.get(id)).filter(Boolean)
-        .map((p) => `<button class="chip" data-goto="${p.id}">${esc(p.display_name)}</button>`).join("")}
-        <span class="spacer"></span><button class="ghost" data-edit="${s.id}">Edit</button></div>
+      <div class="story-foot"><div class="chips">${s.person_ids.map((id) => state.people.get(id)).filter(Boolean).map(chip).join("")}</div>
+        <button class="quiet" data-edit="${s.id}">Edit</button></div>
     </article>`).join("") || `<p class="muted">No stories yet. Family stories — how people met, where they came from, the funny and the hard times — are often the most treasured part of a family history.</p>`;
 }
 
@@ -1050,8 +1085,8 @@ async function storyModal(id, presetPeople = []) {
     <label class="field"><span>The story</span><textarea name="body" rows="12">${esc(s.body)}</textarea></label>
     <div class="modal-actions">
       ${id ? `<button type="submit" value="delete" class="danger left">Delete story</button>` : ""}
-      <button type="submit" value="cancel" class="ghost">Cancel</button>
-      <button type="submit" value="save">Save</button>
+      <button type="submit" value="cancel" class="quiet">Cancel</button>
+      <button type="submit" value="save" class="primary">Save</button>
     </div>`, {
     onReady(form) { people = makeMultiPicker(s.person_ids); $("#storyPeople", form).appendChild(people.el); },
     async onSubmit(fd, action) {
@@ -1091,13 +1126,12 @@ let mediaCache = [];
 async function renderPhotos() {
   mediaCache = await api("GET", "/api/media");
   $("#photoGrid").innerHTML = mediaCache.map((m) => `
-    <figure class="photo" style="margin:0">
+    <figure class="photo">
       <img src="/photo/${m.id}" alt="${esc(m.caption)}" data-view="${m.id}" loading="lazy">
       <figcaption class="cap">
         ${m.caption ? esc(m.caption) : `<span class="muted">${esc(m.original_name || "No caption")}</span>`}
-        ${m.date ? `<span class="muted"> · ${esc(m.date)}</span>` : ""}
-        <div class="chips">${m.person_ids.map((id) => state.people.get(id)).filter(Boolean)
-          .map((p) => `<button class="chip" data-goto="${p.id}">${esc(p.display_name)}</button>`).join("")}
+        ${m.date ? `<span class="muted">, ${esc(m.date)}</span>` : ""}
+        <div class="chips">${m.person_ids.map((id) => state.people.get(id)).filter(Boolean).map(chip).join("")}
           <span class="spacer"></span><button class="link" data-edit="${m.id}">Edit</button></div>
       </figcaption>
     </figure>`).join("") || `<p class="muted">No photos yet. Add scans of old prints, documents, gravestones, letters…</p>`;
@@ -1113,8 +1147,8 @@ function photoModal(m) {
     <div class="field"><span>Who's in it</span><div id="photoPeople"></div></div>
     <div class="modal-actions">
       <button type="submit" value="delete" class="danger left">Delete photo</button>
-      <button type="submit" value="cancel" class="ghost">Cancel</button>
-      <button type="submit" value="save">Save</button>
+      <button type="submit" value="cancel" class="quiet">Cancel</button>
+      <button type="submit" value="save" class="primary">Save</button>
     </div>`, {
     onReady(form) { people = makeMultiPicker(m.person_ids); $("#photoPeople", form).appendChild(people.el); },
     async onSubmit(fd, action) {
@@ -1134,10 +1168,10 @@ function photoModal(m) {
 function lightbox(m, person) {
   openModal(`
     <img src="/photo/${m.id}" alt="${esc(m.caption)}">
-    ${m.caption || m.date ? `<p style="text-align:center;margin:0">${esc(m.caption)}${m.date ? ` <span class="muted">· ${esc(m.date)}</span>` : ""}</p>` : ""}
+    ${m.caption || m.date ? `<p class="caption">${esc(m.caption)}${m.date ? ` <span class="muted">${esc(m.date)}</span>` : ""}</p>` : ""}
     <div class="modal-actions">
-      ${person ? `<button type="submit" value="portrait" class="ghost left">Use as ${esc(person.given_names || "their")}'s portrait</button>` : ""}
-      <button type="submit" value="details" class="ghost">Edit details</button>
+      ${person ? `<button type="submit" value="portrait" class="quiet left">Use as ${esc(person.given_names || "their")}'s portrait</button>` : ""}
+      <button type="submit" value="details" class="quiet">Edit details</button>
       <button type="submit" value="cancel">Close</button>
     </div>`, {
     wide: true,
@@ -1159,9 +1193,9 @@ function lightbox(m, person) {
 let kinA, kinB;
 async function runKin() {
   const out = $("#kinResult");
-  if (!kinA.value || !kinB.value) { out.innerHTML = ""; return; }
+  if (!kinA.value || !kinB.value) { out.innerHTML = `<p class="kin-empty">Choose two people to see how they're related.</p>`; return; }
   const r = await api("GET", `/api/relationship?a=${kinA.value}&b=${kinB.value}`);
-  const list = (rels) => `<ul>${rels.map((x) => `<li><b>${esc(x.label)}</b>${x.via.length ? ` <span class="muted">— through ${esc(x.via.join(" & "))}</span>` : ""}</li>`).join("")}</ul>`;
+  const list = (rels) => `<ul>${rels.map((x) => `<li><b>${esc(x.label)}</b>${x.via.length ? ` <span class="via">through ${esc(x.via.join(" and "))}</span>` : ""}</li>`).join("")}</ul>`;
   const same = JSON.stringify(r.legal.map((x) => x.label)) === JSON.stringify(r.genetic.map((x) => x.label));
   out.innerHTML = `
     <div class="kin-card">
@@ -1170,7 +1204,6 @@ async function runKin() {
       ${!same && r.legal.length ? `<h4>Legally, including adoption</h4>${list(r.legal)}` : ""}
       ${!same && r.genetic.length ? `<h4>By blood</h4>${list(r.genetic)}` : ""}
       ${r.other.length ? `<h4>Also</h4><ul>${r.other.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>` : ""}
-      <p class="hint" style="margin-top:12px">Read as: “${esc(r.b)} is ${esc(r.a)}'s …”</p>
     </div>`;
 }
 
@@ -1196,6 +1229,64 @@ async function importGedcom(file) {
   toast(`Imported ${res.people || 0} people, ${res.couples || 0} couples, ${res["parent links"] || 0} parent links${res.stories ? `, ${res.stories} stories` : ""}.`);
   state.focus = null;
   await refresh();
+}
+
+function clearTree() {
+  openModal(`
+    <h2>Start over with an empty tree?</h2>
+    <p>This removes every person, relationship, story and photo from Heirloom.
+       A backup is saved first in the <b>backups</b> folder inside your data folder, so it can be recovered.</p>
+    <div class="modal-actions">
+      <button type="submit" value="cancel" class="quiet">Keep everything</button>
+      <button type="submit" value="clear" class="danger">Clear the tree</button>
+    </div>`, {
+    async onSubmit(fd, action) {
+      if (action !== "clear") return;
+      await api("POST", "/api/clear", { confirm: "clear" });
+      closePanel();
+      state.focus = null;
+      store("heirloom.focus", "");
+      await refresh();
+      toast("The tree is empty and ready for your family.");
+    },
+  });
+}
+
+let finderHits = [], finderHi = 0;
+function openFinder() {
+  const dlg = $("#finder");
+  if (dlg.open) return;
+  $("#finderInput").value = "";
+  drawFinder();
+  dlg.showModal();
+  $("#finderInput").focus();
+}
+function drawFinder() {
+  const q = $("#finderInput").value.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  finderHits = state.graph.people.filter((p) => words.every((w) => searchText(p).includes(w)))
+    .sort((a, b) => a.display_name.localeCompare(b.display_name)).slice(0, 30);
+  finderHi = 0;
+  $("#finderList").innerHTML = finderHits.map((p, i) => `
+    <div class="finder-item${i === 0 ? " hi" : ""}" data-i="${i}" role="option">${avatar(p)}
+      <div><div class="fn">${esc(p.display_name)}</div>
+      <small>${esc([lifespan(p), p.nee && `${nee(p)} ${p.nee}`, p.birth_place].filter(Boolean).join(", "))}</small></div></div>`).join("")
+    || `<div class="finder-none">${state.graph.people.length ? "No one matches that." : "No one has been added yet."}</div>`;
+}
+function setupFinder() {
+  const dlg = $("#finder"), input = $("#finderInput"), list = $("#finderList");
+  const pick = (i) => { const p = finderHits[i]; if (!p) return; dlg.close(); gotoPerson(p.id); };
+  input.addEventListener("input", drawFinder);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      finderHi = Math.max(0, Math.min(finderHits.length - 1, finderHi + (e.key === "ArrowDown" ? 1 : -1)));
+      $$(".finder-item", list).forEach((el, i) => el.classList.toggle("hi", i === finderHi));
+      $$(".finder-item", list)[finderHi]?.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") { e.preventDefault(); pick(finderHi); }
+  });
+  list.addEventListener("click", (e) => { const it = e.target.closest(".finder-item"); if (it) pick(Number(it.dataset.i)); });
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
 }
 
 let focusPicker;
@@ -1225,7 +1316,7 @@ async function init() {
 
   $$(".tabs button").forEach((b) => (b.onclick = () => switchTab(b.dataset.tab)));
   $("#addPersonBtn").onclick = $("#addPersonBtn2").onclick = $("#emptyAdd").onclick = () => personModal();
-  $("#emptySample").onclick = async () => { await api("POST", "/api/sample"); state.focus = null; await refresh(); toast("Loaded the example family. Try “How are we related?” with Emma and Samuel."); };
+  $("#emptySample").onclick = async () => { await api("POST", "/api/sample"); state.focus = null; await refresh(); toast("Example family loaded. Try Relationships with Emma and Samuel."); };
   $("#dataBtn").onclick = (e) => { e.stopPropagation(); $("#dataMenu").hidden = !$("#dataMenu").hidden; };
   document.addEventListener("click", () => ($("#dataMenu").hidden = true));
   $("#importBtn").onclick = $("#emptyImport").onclick = () => $("#gedFile").click();
@@ -1257,11 +1348,24 @@ async function init() {
   $("#familyName").onclick = () => openModal(`
     <h2>Family name</h2>
     ${field("family_name", "Shown at the top of the page", state.meta.family_name)}
-    <div class="modal-actions"><button type="submit" value="cancel" class="ghost">Cancel</button><button type="submit" value="save">Save</button></div>`, {
+    <div class="modal-actions"><button type="submit" value="cancel" class="quiet">Cancel</button><button type="submit" value="save" class="primary">Save</button></div>`, {
     async onSubmit(fd) { await api("PUT", "/api/meta", { family_name: fd.get("family_name") }); await refresh(); },
   });
-  $("#familyName").onkeydown = (e) => { if (e.key === "Enter") $("#familyName").click(); };
   window.addEventListener("resize", () => applyView());
+  $("#printBtn").onclick = () => { switchTab("tree"); closePanel(); state.fitNext = true; renderTree(); setTimeout(() => window.print(), 150); };
+  $("#clearBtn").onclick = $("#bannerClear").onclick = clearTree;
+  $("#finderBtn").onclick = openFinder;
+  setupFinder();
+  document.addEventListener("keydown", (e) => {
+    const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+    if ((e.key === "k" && (e.ctrlKey || e.metaKey)) || (e.key === "/" && !typing && !document.querySelector("dialog[open]"))) {
+      e.preventDefault();
+      openFinder();
+    } else if (e.key === "Escape" && !document.querySelector("dialog[open]") && !$("#panel").hidden) {
+      closePanel();
+    }
+  });
+  runKin();
   setupPanZoom();
   await refresh();
 }

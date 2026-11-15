@@ -60,6 +60,7 @@ class Api:
         r("GET", r"/api/relationship", self.rel)
         r("POST", r"/api/import-gedcom", lambda m, q, b: import_gedcom(self.s, b.get("text", "")))
         r("POST", r"/api/sample", self.sample)
+        r("POST", r"/api/clear", self.clear)
 
     def route(self, method, pattern, fn):
         self.routes.append((method, re.compile(pattern + "$"), fn))
@@ -76,6 +77,7 @@ class Api:
         return {
             "family_name": self.s.get_meta("family_name", "Our Family"),
             "empty": self.s.is_empty(),
+            "sample": self.s.get_meta("sample") == "1",
             "data_dir": self.s.data_dir,
             "kinds": {"parent": dbmod.PARENT_KINDS, "couple": dbmod.COUPLE_KINDS,
                       "end": dbmod.END_REASONS, "name": dbmod.NAME_KINDS, "fact": dbmod.FACT_KINDS},
@@ -99,6 +101,13 @@ class Api:
         if not self.s.is_empty():
             raise Invalid("The sample family can only be loaded into an empty tree.")
         load_sample(self.s)
+        self.s.set_meta("sample", "1")
+        return {"ok": True}
+
+    def clear(self, m, q, b):
+        if b.get("confirm") != "clear":
+            raise Invalid("Confirmation missing.")
+        self.s.clear_all()
         return {"ok": True}
 
 
@@ -239,6 +248,7 @@ def backup_zip(store):
 
 def serve(data_dir, port=8765, host="127.0.0.1"):
     store = Store(data_dir)
+    store.auto_backup()
     api = Api(store)
     handler = make_handler(api)
     last_error = None

@@ -175,6 +175,48 @@ class Store:
                           (str(SCHEMA_VERSION),))
         self.conn.commit()
 
+    # ---------- safety ----------
+    def _stamp(self):
+        return datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+
+    def auto_backup(self, keep=15):
+        """Copy the database into backups/ (called at every start). Keeps the newest `keep`."""
+        if self.is_empty():
+            return None
+        bdir = os.path.join(self.data_dir, "backups")
+        os.makedirs(bdir, exist_ok=True)
+        dest_path = os.path.join(bdir, f"family-{self._stamp()}.db")
+        dest = sqlite3.connect(dest_path)
+        self.conn.backup(dest)
+        dest.close()
+        old = sorted(f for f in os.listdir(bdir) if f.startswith("family-") and f.endswith(".db"))
+        for f in old[:-keep]:
+            try:
+                os.remove(os.path.join(bdir, f))
+            except OSError:
+                pass
+        return dest_path
+
+    def _set_aside(self, filename):
+        """Move a photo into backups/removed-photos instead of deleting it."""
+        src = os.path.join(self.media_dir, filename)
+        if not os.path.isfile(src):
+            return
+        dst_dir = os.path.join(self.data_dir, "backups", "removed-photos")
+        os.makedirs(dst_dir, exist_ok=True)
+        os.replace(src, os.path.join(dst_dir, f"{self._stamp()}-{filename}"))
+
+    def clear_all(self):
+        """Empty the tree (after taking a backup). Used to remove the example family."""
+        self.auto_backup(keep=30)
+        for m in self.q("SELECT filename FROM media"):
+            self._set_aside(m["filename"])
+        for t in ("story_person", "media_person", "story", "fact", "alt_name", "parent_link",
+                  "couple", "person", "media"):
+            self.conn.execute(f"DELETE FROM {t}")
+        self.conn.execute("DELETE FROM meta WHERE key IN ('sample', 'family_name')")
+        self.conn.commit()
+
     # ---------- helpers ----------
     def q(self, sql, args=()):
         return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
@@ -482,7 +524,7 @@ class Store:
         self.conn.execute("DELETE FROM media WHERE id=?", (mid,))
         self.conn.commit()
         try:
-            os.remove(os.path.join(self.media_dir, m["filename"]))
+            self._set_aside(m["filename"])
         except OSError:
             pass
 

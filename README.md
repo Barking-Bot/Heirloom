@@ -37,10 +37,10 @@ Get Python free from <https://www.python.org/downloads/> (on Windows, tick
 Your browser opens to Heirloom. Leave the small black window open while you
 work; close it (or press Ctrl+C) when you're done. Everything is saved as you go.
 
-New to it? On the empty screen, click **See an example family** to explore a
+New to it? On the empty screen, click **Or explore an example family first** to see a
 sample tree with an adoption, a divorce and a stepfather, then try
-**How are we related?** with Emma and Samuel. Start a fresh folder (below) for
-your real family.
+**Relationships** with Emma and Samuel. When you're done, use the banner's
+"clear it and start your own" link to empty the tree for your real family.
 
 ## Where your family's data lives
 
@@ -57,6 +57,11 @@ python3 start_heirloom.py --data "/path/to/Smith Family"
 ```
 
 ### Keeping it safe
+
+Every time Heirloom starts, it saves a dated copy of your database in a
+`backups` folder inside your data folder (the 15 most recent are kept).
+Deleted photos are moved there too, rather than erased.
+
 
 Use **Import & save → Download a full backup**. You get one zip with the
 database, every photo, and a GEDCOM copy that any genealogy program can open.
@@ -84,6 +89,9 @@ adoption and step relationships and your stories.
   second option is how you record that a cousin was later adopted by an aunt.
   Pick the kind of parent (birth, adoptive, step, foster…). The ✎ beside any
   relative lets you change or remove that link.
+- **Find anyone** with the search box at the top, or press Ctrl+K (or `/`).
+  Press Esc to close the details panel.
+- **Print the tree** (or save it as a PDF) from the ⋯ menu.
 - **Dates** can be written however you know them: `5 Mar 1923`, `abt 1900`,
   `1890s`, `bef 1850`.
 - **Stories** can involve several people and record who told them.

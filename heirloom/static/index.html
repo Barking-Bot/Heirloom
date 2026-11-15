@@ -5,102 +5,133 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Heirloom</title>
 <link rel="stylesheet" href="style.css">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3v26M16 10c-6 0-9 4-9 8M16 10c6 0 9 4 9 8M16 18c-4 0-6 3-6 6M16 18c4 0 6 3 6 6' stroke='%237a4b2a' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 29V12M16 18l-7-5M16 15l6-5M9 13V7M22 10V5' stroke='%232F5D4E' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='9' cy='6' r='3' fill='%232F5D4E'/%3E%3Ccircle cx='22' cy='5' r='3' fill='%232F5D4E'/%3E%3Ccircle cx='16' cy='11' r='3' fill='%232F5D4E'/%3E%3C/svg%3E">
 </head>
 <body>
 <header class="top">
-  <div class="brand">
-    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3v26M16 10c-6 0-9 4-9 8M16 10c6 0 9 4 9 8M16 18c-4 0-6 3-6 6M16 18c4 0 6 3 6 6"/></svg>
-    <h1 id="familyName" title="Click to rename" tabindex="0">Our Family</h1>
-  </div>
-  <nav class="tabs" role="tablist">
+  <button class="brand" id="familyName" title="Rename">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 29V12M16 18l-7-5M16 15l6-5M9 13V7M22 10V5"/><circle cx="9" cy="6" r="3"/><circle cx="22" cy="5" r="3"/><circle cx="16" cy="11" r="3"/></svg>
+    <span id="familyNameText">Our Family</span>
+  </button>
+  <nav class="tabs" aria-label="Sections">
     <button data-tab="tree" class="active">Tree</button>
     <button data-tab="people">People</button>
     <button data-tab="stories">Stories</button>
     <button data-tab="photos">Photos</button>
-    <button data-tab="kin">How are we related?</button>
+    <button data-tab="kin">Relationships</button>
   </nav>
-  <div class="data-menu">
-    <button id="dataBtn" class="ghost">Import &amp; save ▾</button>
-    <div id="dataMenu" class="menu" hidden>
-      <button id="importBtn">Import a GEDCOM file (Ancestry, FamilySearch…)</button>
-      <a href="/api/export.ged">Export as GEDCOM</a>
-      <a href="/api/backup.zip">Download a full backup (with photos)</a>
+  <div class="top-right">
+    <button class="finder-btn" id="finderBtn" title="Find a person (Ctrl+K)">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4 4"/></svg>
+      <span>Find a person</span><kbd>Ctrl K</kbd>
+    </button>
+    <div class="data-menu">
+      <button id="dataBtn" class="quiet icon" title="Import, export and backups" aria-haspopup="menu">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="4" cy="10" r="1.6"/><circle cx="10" cy="10" r="1.6"/><circle cx="16" cy="10" r="1.6"/></svg>
+      </button>
+      <div id="dataMenu" class="menu" role="menu" hidden>
+        <button id="importBtn">Import a GEDCOM file<small>From Ancestry, FamilySearch, MyHeritage…</small></button>
+        <a href="/api/export.ged">Export as GEDCOM<small>Opens in any genealogy program</small></a>
+        <a href="/api/backup.zip">Download a full backup<small>Everything, including original photos</small></a>
+        <button id="printBtn">Print the tree<small>Or save it as a PDF</small></button>
+        <hr>
+        <button id="clearBtn" class="danger-item">Start over with an empty tree…</button>
+      </div>
+      <input id="gedFile" type="file" accept=".ged,.gedcom,text/plain" hidden>
     </div>
-    <input id="gedFile" type="file" accept=".ged,.gedcom,text/plain" hidden>
   </div>
 </header>
+
+<div id="sampleBanner" class="banner" hidden>
+  You're looking at an example family. Explore it, then
+  <button id="bannerClear" class="link">clear it and start your own</button>.
+</div>
 
 <main>
   <section id="tab-tree" class="tab active">
     <div class="tree-tools">
-      <button id="addPersonBtn">＋ Add person</button>
-      <label>Centered on <span id="focusPicker" class="picker-slot"></span></label>
-      <label>Generations up <select id="genUp"></select></label>
-      <label>down <select id="genDown"></select></label>
+      <label class="focus-on">Centred on <span id="focusPicker" class="picker-slot"></span></label>
+      <label class="gens">Show <select id="genUp"></select> generations up and <select id="genDown"></select> down</label>
       <span class="spacer"></span>
-      <button class="ghost icon" id="zoomOut" title="Zoom out">−</button>
-      <button class="ghost icon" id="zoomIn" title="Zoom in">+</button>
-      <button class="ghost" id="zoomFit">Fit</button>
+      <button id="addPersonBtn" class="primary">Add person</button>
     </div>
     <div class="tree-wrap">
       <svg id="tree" tabindex="0" aria-label="Family tree"><g id="viewport"></g></svg>
       <div id="emptyState" class="empty" hidden>
+        <svg class="empty-art" viewBox="0 0 120 90" aria-hidden="true">
+          <path d="M60 86V44M60 60L34 40M60 54l24-18M34 40V22M84 36V18"/>
+          <circle cx="34" cy="16" r="9"/><circle cx="84" cy="13" r="9"/><circle cx="60" cy="36" r="9"/>
+        </svg>
         <h2>Start your family's tree</h2>
-        <p>Add the first person — often yourself, or the oldest ancestor you know — and grow it from there.</p>
+        <p>Add the first person — yourself, or the oldest relative you know about — and grow the tree from there.</p>
         <div class="row">
-          <button id="emptyAdd">Add the first person</button>
-          <button id="emptySample" class="ghost">See an example family</button>
-          <button id="emptyImport" class="ghost">Import a GEDCOM file</button>
+          <button id="emptyAdd" class="primary">Add the first person</button>
+          <button id="emptyImport">Import a GEDCOM file</button>
         </div>
+        <button id="emptySample" class="link">Or explore an example family first</button>
       </div>
       <div class="legend" aria-label="Line legend">
-        <span><svg width="34" height="10"><line x1="2" y1="5" x2="32" y2="5" class="l-biological"/></svg>Birth</span>
-        <span><svg width="34" height="10"><line x1="2" y1="5" x2="32" y2="5" class="l-adoptive"/></svg>Adopted</span>
-        <span><svg width="34" height="10"><line x1="2" y1="5" x2="32" y2="5" class="l-step"/></svg>Step</span>
-        <span><svg width="34" height="10"><line x1="2" y1="5" x2="32" y2="5" class="l-foster"/></svg>Foster / guardian</span>
-        <span><svg width="34" height="10"><line x1="2" y1="3" x2="32" y2="3" class="u-line"/><line x1="2" y1="7" x2="32" y2="7" class="u-line"/></svg>Married</span>
+        <span><svg width="30" height="10"><line x1="1" y1="5" x2="29" y2="5" class="edge l-biological"/></svg>Birth</span>
+        <span><svg width="30" height="10"><line x1="1" y1="5" x2="29" y2="5" class="edge l-adoptive"/></svg>Adopted</span>
+        <span><svg width="30" height="10"><line x1="1" y1="5" x2="29" y2="5" class="edge l-step"/></svg>Step</span>
+        <span><svg width="30" height="10"><line x1="1" y1="5" x2="29" y2="5" class="edge l-foster"/></svg>Foster or guardian</span>
+        <span><svg width="30" height="10"><line x1="1" y1="3" x2="29" y2="3" class="u-line"/><line x1="1" y1="7" x2="29" y2="7" class="u-line"/></svg>Married</span>
+      </div>
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button id="zoomIn" class="quiet icon" title="Zoom in">+</button>
+        <button id="zoomOut" class="quiet icon" title="Zoom out">−</button>
+        <button id="zoomFit" class="quiet icon" title="Fit the whole tree">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4"/></svg>
+        </button>
       </div>
     </div>
-    <aside id="panel" class="panel" hidden></aside>
+    <aside id="panel" class="panel" hidden aria-label="Person details"></aside>
   </section>
 
   <section id="tab-people" class="tab">
-    <div class="list-tools">
-      <input id="peopleSearch" type="search" placeholder="Search names, places, years…">
-      <button id="addPersonBtn2">＋ Add person</button>
+    <div class="page">
+      <div class="page-head">
+        <h2>People</h2>
+        <input id="peopleSearch" type="search" placeholder="Search by name, place or year">
+        <button id="addPersonBtn2" class="primary">Add person</button>
+      </div>
+      <table class="people">
+        <thead><tr><th>Name</th><th>Born</th><th>Died</th></tr></thead>
+        <tbody id="peopleBody"></tbody>
+      </table>
     </div>
-    <table class="people">
-      <thead><tr><th>Name</th><th>Born</th><th>Died</th><th></th></tr></thead>
-      <tbody id="peopleBody"></tbody>
-    </table>
   </section>
 
   <section id="tab-stories" class="tab">
-    <div class="list-tools">
-      <input id="storySearch" type="search" placeholder="Search stories…">
-      <button id="addStoryBtn">＋ Write a story</button>
+    <div class="page narrow">
+      <div class="page-head">
+        <h2>Stories</h2>
+        <input id="storySearch" type="search" placeholder="Search stories">
+        <button id="addStoryBtn" class="primary">Write a story</button>
+      </div>
+      <div id="storyList" class="stories"></div>
     </div>
-    <div id="storyList" class="stories"></div>
   </section>
 
   <section id="tab-photos" class="tab">
-    <div class="list-tools">
-      <span class="muted">Originals are kept exactly as uploaded.</span>
-      <span class="spacer"></span>
-      <label class="button">＋ Add photos<input id="photoFiles" type="file" accept="image/*" multiple hidden></label>
+    <div class="page">
+      <div class="page-head">
+        <h2>Photos</h2>
+        <span class="muted">Originals are kept exactly as uploaded.</span>
+        <label class="button primary">Add photos<input id="photoFiles" type="file" accept="image/*" multiple hidden></label>
+      </div>
+      <div id="photoGrid" class="photos"></div>
     </div>
-    <div id="photoGrid" class="photos"></div>
   </section>
 
   <section id="tab-kin" class="tab">
-    <div class="kin">
-      <h2>How are two people related?</h2>
-      <p class="muted">Shows both the legal family (adoption included) and the blood relationship when they differ, plus step, in-law and marriage ties.</p>
+    <div class="page narrow">
+      <div class="page-head"><h2>How are two people related?</h2></div>
+      <p class="muted lede">When an adoption means the family relationship and the blood relationship differ, both are shown, along with step, in-law and marriage ties.</p>
       <div class="kin-pick">
-        <div><span class="lbl">First person</span><span id="kinA" class="picker-slot"></span></div>
-        <button id="kinSwap" class="ghost icon" title="Swap">⇄</button>
-        <div><span class="lbl">Second person</span><span id="kinB" class="picker-slot"></span></div>
+        <label><span class="lbl">First person</span><span id="kinA" class="picker-slot"></span></label>
+        <button id="kinSwap" class="quiet icon" title="Swap the two people">⇄</button>
+        <label><span class="lbl">Second person</span><span id="kinB" class="picker-slot"></span></label>
       </div>
       <div id="kinResult"></div>
     </div>
@@ -108,6 +139,13 @@
 </main>
 
 <dialog id="modal"><form method="dialog" id="modalForm"></form></dialog>
+<dialog id="finder" class="finder" aria-label="Find a person">
+  <div class="finder-box">
+    <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4 4"/></svg>
+    <input id="finderInput" type="text" placeholder="Type a name, place or year" autocomplete="off">
+  </div>
+  <div id="finderList" class="finder-list" role="listbox"></div>
+</dialog>
 <div id="toast" role="status" hidden></div>
 <script src="app.js"></script>
 </body>
