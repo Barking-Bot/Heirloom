@@ -71,7 +71,10 @@ function lifespan(p) {
 const nee = (p) => (p.sex === "F" ? "née" : "born");
 const initials = (p) => {
   const g = (p.given_names || "").trim(), s = (p.surname || p.birth_surname || "").trim();
-  return ((g[0] || "") + (s[0] || "")).toUpperCase() || "?";
+  if (s) return ((g[0] || "") + s.replace(/^(de|del|van|von|da|di|le|la|du)\s+/i, "")[0]).toUpperCase();
+  // No surname (e.g. "Louis XIV", "Jaime, Duke of Segovia"): first and last capitalised words, skipping numerals.
+  const words = g.replace(/,/g, " ").split(/\s+/).filter((w) => /^\p{Lu}/u.test(w) && !/^[IVXLC]+$/.test(w));
+  return ((words[0] || g)[0] + (words.length > 1 ? words[words.length - 1][0] : "")).toUpperCase() || "?";
 };
 const avatar = (p, cls = "") => `<span class="av${p.deceased ? " dead" : ""}${cls ? " " + cls : ""}" aria-hidden="true">${
   p.portrait_id ? `<img src="/photo/${p.portrait_id}" alt="" loading="lazy">` : esc(initials(p))}</span>`;
@@ -215,7 +218,11 @@ function computeLayout() {
   if (!focus || !state.people.has(focus)) return null;
   const parentsOf = new Map(), childrenOf = new Map(), partnersOf = new Map();
   const push = (m, k, v) => (m.get(k) || m.set(k, []).get(k)).push(v);
-  for (const l of g.links) { push(parentsOf, l.child_id, l); push(childrenOf, l.parent_id, l); }
+  const byBirth = [...g.links].sort((x, y) => {
+    const a = state.people.get(x.child_id), b = state.people.get(y.child_id);
+    return (a.birth_year || 9999) - (b.birth_year || 9999) || (a.birth_date || "").localeCompare(b.birth_date || "") || a.id - b.id;
+  });
+  for (const l of byBirth) { push(parentsOf, l.child_id, l); push(childrenOf, l.parent_id, l); }
   for (const c of g.couples) { push(partnersOf, c.partner1_id, c.partner2_id); push(partnersOf, c.partner2_id, c.partner1_id); }
 
   // Generations by walking out from the focus person.
@@ -495,7 +502,7 @@ function bounds() {
   return { x0, y0: y0 - 30, x1, y1 };
 }
 
-function fitView() {
+function fitView(whole = false) {
   const b = bounds();
   if (!b) return;
   const svgEl = $("#tree");
@@ -504,7 +511,7 @@ function fitView() {
   const availW = w - panelW;
   const k = Math.max(0.25, Math.min(1.1, Math.min((availW - 40) / (b.x1 - b.x0), (h - 40) / (b.y1 - b.y0))));
   const f = state.layout.nodes.get(state.focus);
-  if (k < 0.6 && f) {
+  if (!whole && k < 0.6 && f) {
     // Too big to read when fitted (common on phones): show the centred person at a readable size.
     const kk = w < 700 ? 0.75 : 0.6;
     state.view = { k: kk, x: availW / 2 - (f.x + W / 2) * kk, y: h / 2 - (f.y + H / 2) * kk };
@@ -587,7 +594,7 @@ function setupPanZoom() {
   });
   $("#zoomIn").onclick = () => zoomAt(1.25, el.clientWidth / 2, el.clientHeight / 2);
   $("#zoomOut").onclick = () => zoomAt(0.8, el.clientWidth / 2, el.clientHeight / 2);
-  $("#zoomFit").onclick = fitView;
+  $("#zoomFit").onclick = () => fitView(true);
 }
 
 // ------------------------------------------------------------------ side panel
@@ -659,7 +666,9 @@ async function openPanel(id, quiet = false) {
         s.tag ? `<span class="tag ${s.tag.split(" ")[0]}">${cap(s.tag)}</span>` : "")).join("")) : ""}
       ${p.alt_names.length ? section("Other names", `<dl class="facts">${p.alt_names.map((n) =>
         `<dt>${esc(cap(n.kind))}</dt><dd>${esc([n.given_names, n.surname].filter(Boolean).join(" "))}${n.from_date ? ` <span class="muted">from ${esc(n.from_date)}</span>` : ""}</dd>`).join("")}</dl>`) : ""}
-      ${p.facts.length ? section("Life events", `<dl class="facts">${p.facts.map((f) =>
+      ${p.facts.some((f) => f.kind === "title") ? section("Titles", p.facts.filter((f) => f.kind === "title")
+        .map((f) => `<div class="title-line">${esc(f.detail)}${f.date ? ` <span class="muted">${esc(f.date)}</span>` : ""}</div>`).join("")) : ""}
+      ${p.facts.some((f) => f.kind !== "title") ? section("Life events", `<dl class="facts">${p.facts.filter((f) => f.kind !== "title").map((f) =>
         `<dt>${esc(cap(f.kind))}</dt><dd>${esc([f.detail, [f.date, f.place].filter(Boolean).join(", ")].filter(Boolean).join(" — "))}</dd>`).join("")}</dl>`) : ""}
       ${p.notes ? section("Notes", `<div class="notes">${esc(p.notes)}</div>`) : ""}
       ${section("Stories",
@@ -1352,7 +1361,7 @@ async function init() {
     async onSubmit(fd) { await api("PUT", "/api/meta", { family_name: fd.get("family_name") }); await refresh(); },
   });
   window.addEventListener("resize", () => applyView());
-  $("#printBtn").onclick = () => { switchTab("tree"); closePanel(); state.fitNext = true; renderTree(); setTimeout(() => window.print(), 150); };
+  $("#printBtn").onclick = () => { switchTab("tree"); closePanel(); renderTree(); fitView(true); setTimeout(() => window.print(), 150); };
   $("#clearBtn").onclick = $("#bannerClear").onclick = clearTree;
   $("#finderBtn").onclick = openFinder;
   setupFinder();

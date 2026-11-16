@@ -230,6 +230,7 @@ main { flex: 1; min-height: 0; position: relative; }
 }
 .tag.step, .tag.half { background: var(--sunk); color: var(--muted); }
 .tag.foster, .tag.guardian { background: color-mix(in srgb, var(--ochre) 15%, transparent); color: var(--ochre); }
+.title-line { font-size: 14.5px; padding: 3px 0; }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; margin: 4px 0 8px; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }

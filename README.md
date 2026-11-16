@@ -42,6 +42,15 @@ sample tree with an adoption, a divorce and a stepfather, then try
 **Relationships** with Emma and Samuel. When you're done, use the banner's
 "clear it and start your own" link to empty the tree for your real family.
 
+### A historical example: the Bourbon succession
+
+`samples/bourbon-succession.ged` is the Legitimist line of succession to the
+French throne, from Louis XIV to Louis Alphonse de Bourbon, in 54 people. Import
+it (⋯ menu, then **Import a GEDCOM file**) into an empty tree to see second
+marriages, a divorce, an annulment, two cousin marriages and a claim passing
+sideways between branches. Search for Louis Alphonse, then set the
+generations to **all**.
+
 ## Where your family's data lives
 
 In a folder called `family-data` next to the program:

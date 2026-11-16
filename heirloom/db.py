@@ -23,7 +23,7 @@ PARENT_KINDS = ("biological", "adoptive", "step", "foster", "guardian",
 COUPLE_KINDS = ("marriage", "civil union", "partnership", "engagement", "other")
 END_REASONS = ("", "divorce", "death", "annulment", "separation", "other")
 NAME_KINDS = ("married", "adopted", "changed", "nickname", "religious", "alias")
-FACT_KINDS = ("occupation", "residence", "education", "military", "religion",
+FACT_KINDS = ("title", "occupation", "residence", "education", "military", "religion",
               "immigration", "emigration", "naturalization", "baptism",
               "burial", "cause of death", "other")
 

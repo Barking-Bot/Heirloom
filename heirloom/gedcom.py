@@ -85,7 +85,7 @@ def _split_name(value):
     return given, m.group(2).strip()
 
 
-_FACT_TAGS = {"OCCU": "occupation", "RESI": "residence", "EDUC": "education",
+_FACT_TAGS = {"TITL": "title", "OCCU": "occupation", "RESI": "residence", "EDUC": "education",
               "RELI": "religion", "IMMI": "immigration", "EMIG": "emigration",
               "NATU": "naturalization", "BAPM": "baptism", "CHR": "baptism",
               "BURI": "burial", "_MILT": "military", "_MILTID": "military"}
@@ -104,6 +104,11 @@ def import_gedcom(store, text):
     def own_notes(rec):
         return "\n\n".join(note_text(n) for n in rec.all("NOTE")
                            if not n.value.strip().startswith("@") and note_text(n))
+
+    head = next((r for r in records if r.tag == "HEAD"), None)
+    tree_name = head.first("SOUR").val("_TREE").strip() if head and head.first("SOUR") else ""
+    if tree_name and not store.get_meta("family_name"):
+        store.set_meta("family_name", tree_name[:120])
 
     indi_ids = {}
     pedi = {}            # (indi_xref, fam_xref) -> kind
@@ -305,7 +310,8 @@ def export_gedcom(store):
         for pid in s["person_ids"]:
             story_refs[pid].append(f"@N{i}@")
 
-    out = ["0 HEAD", "1 SOUR HEIRLOOM", "2 NAME Heirloom family tree", "1 GEDC",
+    out = ["0 HEAD", "1 SOUR HEIRLOOM", "2 NAME Heirloom family tree",
+           f"2 _TREE {store.get_meta('family_name', 'Our Family')}", "1 GEDC",
            "2 VERS 5.5.1", "2 FORM LINEAGE-LINKED", "1 CHAR UTF-8",
            f"1 DATE {datetime.date.today().strftime('%d %b %Y').upper()}"]
 
@@ -330,7 +336,7 @@ def export_gedcom(store):
         for x in p["facts"]:
             tag = _FACT_OUT.get(x["kind"])
             if tag:
-                out.append(f"1 {tag}" + (f" {x['detail']}" if x["detail"] and tag in ("OCCU", "EDUC", "RELI") else ""))
+                out.append(f"1 {tag}" + (f" {x['detail']}" if x["detail"] and tag in ("TITL", "OCCU", "EDUC", "RELI") else ""))
             else:
                 out.append("1 EVEN" + (f" {x['detail']}" if x["detail"] else ""))
                 out.append(f"2 TYPE {x['kind'].title()}")
@@ -338,7 +344,7 @@ def export_gedcom(store):
                 out.append(f"2 DATE {x['date']}")
             if x["place"]:
                 out.append(f"2 PLAC {x['place']}")
-            if tag and x["detail"] and tag not in ("OCCU", "EDUC", "RELI"):
+            if tag and x["detail"] and tag not in ("TITL", "OCCU", "EDUC", "RELI"):
                 out.append(f"2 NOTE {x['detail']}")
         if p["notes"]:
             out += _lines(1, "NOTE", p["notes"])

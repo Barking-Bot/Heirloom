@@ -185,7 +185,8 @@ def relationship(graph, a, b):
     leg_parents = parent_sets(graph, "legal")
     result["genetic"] = describe_routes(blood_routes(a, b, gen_parents), sex_b, people, couples)
     result["legal"] = describe_routes(blood_routes(a, b, leg_parents), sex_b, people, couples)
-    result["other"] = _other_relations(graph, a, b, people, leg_parents, gen_parents)
+    blood = bool(result["genetic"] or result["legal"])
+    result["other"] = _other_relations(graph, a, b, people, leg_parents, gen_parents, blood)
     result["summary"] = _summarize(result, pa, pb)
     return result
 
@@ -226,7 +227,7 @@ def _summarize(r, pa, pb):
     return " ".join(parts)
 
 
-def _other_relations(graph, a, b, people, leg_parents, gen_parents):
+def _other_relations(graph, a, b, people, leg_parents, gen_parents, blood=False):
     sex_b = people[b].get("sex", "U")
     out = []
 
@@ -285,7 +286,8 @@ def _other_relations(graph, a, b, people, leg_parents, gen_parents):
                     out.append(gender("child-in-law", sex_b))
                 else:
                     rel_sex = people[rel].get("sex", "U")
-                    out.append(f"{name_route(da, db, rel_sex)}'s spouse")
+                    if not blood:  # e.g. a grandmother's husband who is also a grandfather
+                        out.append(f"{name_route(da, db, rel_sex)}'s spouse")
         for sp, _ in partners_of[a]:
             if sp == b:
                 continue
@@ -299,7 +301,8 @@ def _other_relations(graph, a, b, people, leg_parents, gen_parents):
                 elif (da, db) == (1, 1):
                     out.append(gender("sibling-in-law", sex_b))
                 else:
-                    out.append(f"spouse's {name_route(da, db, sex_b)}")
+                    if not blood:
+                        out.append(f"spouse's {name_route(da, db, sex_b)}")
     # De-duplicate, keep order.
     seen, uniq = set(), []
     for o in out:
